@@ -107,8 +107,8 @@ public class ParserResult implements Serializable {
 
         Priority[] priorities = Priority.values();
 
-        for (int priority = 0; priority < priorities.length; priority++) {
-            annotationCountByPriority.put(priorities[priority], 0);
+        for (Priority priority1 : priorities) {
+            annotationCountByPriority.put(priority1, 0);
         }
     }
 
@@ -155,66 +155,6 @@ public class ParserResult implements Serializable {
         }
         catch (InterruptedException exception) {
             // ignore
-        }
-    }
-
-    /**
-     * Returns the file name from the cache of all workspace files. The cache will
-     * be built only once.
-     *
-     * @param annotation
-     *            the annotation to get the filename for
-     * @throws IOException
-     *             signals that an I/O exception has occurred.
-     * @throws InterruptedException
-     *             If the user cancels this action
-     */
-    private void findFileByScanningAllWorkspaceFiles(final FileAnnotation annotation) throws IOException, InterruptedException {
-        if (fileNameCache.isEmpty()) {
-            populateFileNameCache();
-        }
-
-        String fileName = FilenameUtils.getName(annotation.getFileName());
-        if (fileNameCache.containsKey(fileName)) {
-            int matchesCount = 0;
-            String absoluteFileName = null;
-            for (String match : fileNameCache.get(fileName)) {
-                if (match.contains(annotation.getFileName())) {
-                    absoluteFileName = workspace.getPath() + SLASH + match;
-                    matchesCount++;
-                }
-            }
-            if (matchesCount == 1) {
-                annotation.setFileName(absoluteFileName);
-            }
-            else {
-                LOGGER.log(Level.FINE, String.format(
-                        "Absolute filename could not be resolved for: %s. Found multiple matches: %s. ",
-                        annotation.getFileName(), fileNameCache.get(fileName)));
-            }
-        }
-        else {
-            LOGGER.log(Level.FINE, String.format(
-                    "Absolute filename could not be resolved for: %s. No such file in workspace: %s. ",
-                    annotation.getFileName(), workspace.getPath()));
-        }
-    }
-
-    /**
-     * Builds a cache of file names in the remote file system.
-     *
-     * @throws IOException
-     *             if the file could not be read
-     * @throws InterruptedException
-     *             if the user cancels the search
-     */
-    // TODO: Maybe the file pattern should be exposed on the UI in order to speed up the scanning, see HUDSON-2927
-    private void populateFileNameCache() throws IOException, InterruptedException {
-        LOGGER.log(Level.FINE, "Building cache of all workspace files to obtain absolute filenames for all warnings: " + workspace.getPath());
-
-        String[] allFiles = workspace.findFiles("**/*");
-        for (String file : allFiles) {
-            fileNameCache.put(FilenameUtils.getName(file), FilenameUtils.separatorsToUnix(file));
         }
     }
 

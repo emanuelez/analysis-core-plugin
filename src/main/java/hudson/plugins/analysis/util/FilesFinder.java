@@ -1,13 +1,16 @@
 package hudson.plugins.analysis.util;
 
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.Multimap;
-import com.google.common.collect.Sets;
+import com.google.common.base.Predicate;
+import com.google.common.base.Predicates;
+import com.google.common.base.Splitter;
+import com.google.common.collect.*;
 import hudson.FilePath;
 import hudson.remoting.VirtualChannel;
 
+import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.Set;
 
 
@@ -18,7 +21,7 @@ import java.util.Set;
  */
 public class FilesFinder implements FilePath.FileCallable<Multimap<String, String>> {
 
-    private Set<String> filesToFind;
+    private Set<List<String>> filesToFind;
 
     private Multimap<String, String> results = HashMultimap.create();
 
@@ -28,7 +31,20 @@ public class FilesFinder implements FilePath.FileCallable<Multimap<String, Strin
      * @param filesToFind the file names to look for
      */
     public FilesFinder(Set<String> filesToFind) {
-        this.filesToFind = filesToFind;
+        Set<List<String>> result = Sets.newHashSet();
+
+        // Split the relative filename and remove everything that comes before a . or .. (included)
+        for (String file : filesToFind) {
+            List<String> splittedFiles = Lists.newArrayList(Splitter.on("/").omitEmptyStrings().split(file));
+            int deleteUpTo = Math.max(splittedFiles.indexOf("."), splittedFiles.indexOf(".."));
+            if (deleteUpTo >= 0) {
+                for (int i = 0; i <= deleteUpTo; i++) {
+                    splittedFiles.remove(0);
+                }
+            }
+            result.add(splittedFiles);
+        }
+        this.filesToFind = result;
     }
 
     /**

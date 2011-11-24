@@ -5,6 +5,8 @@ import static org.mockito.Mockito.*;
 
 import java.io.IOException;
 
+import com.google.common.collect.HashMultimap;
+import com.google.common.collect.Sets;
 import org.junit.Test;
 
 import hudson.plugins.analysis.core.ParserResult.Workspace;
@@ -20,8 +22,8 @@ public class ParserResultTest {
     private static final String OTHER_SCANNED_FILE = "other/file.txt";
     private static final String SCANNED_FILENAME = "relative/path/to/file.txt";
     private static final String SCANNED_FILENAME_WINDOWS = "relative\\path\\to\\file.txt";
-    private static final String WORSPACE_ROOT = "ws";
-    private static final String FOUND_FILE_NAME = WORSPACE_ROOT + "/" + SCANNED_FILENAME;
+    private static final String WORKSPACE_ROOT = "ws";
+    private static final String FOUND_FILE_NAME = WORKSPACE_ROOT + "/" + SCANNED_FILENAME;
 
     /**
      * Verifies that a simple file without path is correctly mapped.
@@ -34,7 +36,7 @@ public class ParserResultTest {
         ParserResult result = new ParserResult(mockWorkspace(new String[] {SCANNED_FILENAME}));
 
         FileAnnotation warning = mockWarning("file.txt");
-        result.addAnnotation(warning);
+        result.addAnnotations(Sets.newHashSet(warning));
 
         verify(warning).setFileName(FOUND_FILE_NAME);
     }
@@ -115,8 +117,11 @@ public class ParserResultTest {
     private Workspace mockWorkspace(final String[] workspaceFiles) throws IOException, InterruptedException {
         Workspace workspace = mock(Workspace.class);
         when(workspace.child(anyString())).thenReturn(workspace);
-        when(workspace.getPath()).thenReturn(WORSPACE_ROOT);
+        when(workspace.getPath()).thenReturn(WORKSPACE_ROOT);
         when(workspace.findFiles(anyString())).thenReturn(workspaceFiles);
+        HashMultimap<String, String> multimap = HashMultimap.create();
+        multimap.put("file.txt", WORKSPACE_ROOT + "/" + workspaceFiles[0]);
+        when(workspace.findRelativeFiles(anySetOf(String.class))).thenReturn(multimap);
         return workspace;
     }
 }
