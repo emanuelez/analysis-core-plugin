@@ -14,13 +14,13 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
+import com.google.common.base.Splitter;
+import com.google.common.collect.*;
+import hudson.plugins.analysis.util.FilesFinder;
 import org.apache.commons.io.FilenameUtils;
 import org.apache.commons.lang.StringUtils;
-
-import com.google.common.collect.HashMultimap;
-import com.google.common.collect.ImmutableList;
-import com.google.common.collect.ImmutableSet;
-import com.google.common.collect.Multimap;
 
 import edu.umd.cs.findbugs.annotations.SuppressWarnings;
 import hudson.FilePath;
@@ -29,6 +29,8 @@ import hudson.plugins.analysis.Messages;
 import hudson.plugins.analysis.util.FileFinder;
 import hudson.plugins.analysis.util.model.FileAnnotation;
 import hudson.plugins.analysis.util.model.Priority;
+
+import javax.annotation.Nullable;
 
 /**
  * Stores the collection of parsed annotations and associated error messages.
@@ -73,6 +75,8 @@ public class ParserResult implements Serializable {
         String getPath();
 
         String[] findFiles(String pattern) throws IOException, InterruptedException;
+        
+        Multimap<String, String> findRelativeFiles(Set<String> filesToFind) throws IOException, InterruptedException;
     }
 
     /**
@@ -136,16 +140,13 @@ public class ParserResult implements Serializable {
      *
      * @param annotation the annotation
      */
-    // TODO: this method is quite dump: when used on a slave then for each file a remote call is initiated
+    // TODO: this method is quite dumb: when used on a slave then for each file a remote call is initiated
     private void expandRelativePaths(final FileAnnotation annotation) {
         try {
             if (hasRelativeFileName(annotation)) {
                 Workspace remoteFile = workspace.child(annotation.getFileName());
                 if (remoteFile.exists()) {
                     annotation.setFileName(remoteFile.getPath());
-                }
-                else {
-                    findFileByScanningAllWorkspaceFiles(annotation);
                 }
             }
         }
@@ -253,6 +254,36 @@ public class ParserResult implements Serializable {
         for (FileAnnotation annotation : newAnnotations) {
             addAnnotation(annotation);
         }
+
+        // Find the annotations that still have relative Paths
+        Iterable<? extends FileAnnotation> relativeAnnotations = Iterables.filter(newAnnotations, new Predicate<FileAnnotation>() {
+            public boolean apply(@Nullable FileAnnotation annotation) {
+                return annotation != null && hasRelativeFileName(annotation);
+            }
+        });
+        
+        // Get the file names out of the obtained annotations
+        Iterable<String> fileNames = Iterables.transform(relativeAnnotations, new Function<FileAnnotation, String>() {
+            public String apply(@Nullable FileAnnotation annotation) {
+                if (annotation == null) return null;
+                
+                return Iterables.getLast(Splitter.on(SLASH).trimResults().split(annotation.getFileName()));
+            }
+        });
+
+        // Find the absolute paths associated to the files and update the annotations
+        try {
+            Multimap<String, String> files = workspace.findRelativeFiles(Sets.newHashSet(fileNames));
+            System.out.println(files);
+            for (FileAnnotation annotation : relativeAnnotations) {
+                annotation.setFileName(Lists.newArrayList(files.get(annotation.getFileName())).get(0));
+            }
+        } catch (IOException e) {
+            // ignore
+        } catch (InterruptedException e) {
+            // ignore
+        }
+
     }
 
     /**
@@ -478,6 +509,10 @@ public class ParserResult implements Serializable {
         public String[] findFiles(final String pattern) throws IOException, InterruptedException {
             return wrapped.act(new FileFinder(pattern));
         }
+
+        public Multimap<String, String> findRelativeFiles(final Set<String> filesToFind) throws IOException, InterruptedException {
+            return wrapped.act(new FilesFinder(filesToFind));
+        }
     }
 
     /**
@@ -504,6 +539,11 @@ public class ParserResult implements Serializable {
         /** {@inheritDoc} */
         public String[] findFiles(final String pattern) throws IOException, InterruptedException {
             return new String[0];
+        }
+
+        /** {@inheritDoc} */
+        public Multimap<String, String> findRelativeFiles(Set<String> String) throws IOException, InterruptedException {
+            return HashMultimap.create();
         }
     }
 
