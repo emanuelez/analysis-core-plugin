@@ -16,7 +16,7 @@ import java.net.URL;
 public class FilesFinderTest {
     
     @Test
-    public void findTest() throws URISyntaxException, IOException, InterruptedException {
+    public void findFileByFilenameTest() throws URISyntaxException, IOException, InterruptedException {
         final String resourceFile = "ActionBinding.cs";
         URL resource = FilesFinder.class.getResource(resourceFile);
         File file = new File(resource.toURI());
@@ -26,4 +26,41 @@ public class FilesFinderTest {
         assertTrue(result.get(resourceFile).size() == 1);
         assertTrue(Lists.newArrayList(result.get(resourceFile)).get(0).endsWith("hudson/plugins/analysis/util/"+resourceFile));
     }
+
+    @Test
+    public void findFileByPartialPathTest() throws URISyntaxException, IOException, InterruptedException {
+        final String resourceFile = "ActionBinding.cs";
+        URL resource = FilesFinder.class.getResource(resourceFile);
+        File file = new File(resource.toURI());
+        File ancestorFolder = file.getParentFile().getParentFile().getParentFile().getParentFile();
+        FilePath ancestorFilePath = new FilePath(ancestorFolder);
+        Multimap<String,String> result = ancestorFilePath.act(new FilesFinder(Sets.newHashSet("analysis/util/ActionBinding.cs")));
+        assertTrue(result.get("analysis/util/ActionBinding.cs").size() == 1);
+        assertTrue(Lists.newArrayList(result.get("analysis/util/ActionBinding.cs")).get(0).endsWith("hudson/plugins/analysis/util/"+resourceFile));
+    }
+
+    @Test
+    public void findFileByVeryPartialPathTest() throws URISyntaxException, IOException, InterruptedException {
+        final String resourceFile = "ActionBinding.cs";
+        URL resource = FilesFinder.class.getResource(resourceFile);
+        File file = new File(resource.toURI());
+        File ancestorFolder = file.getParentFile().getParentFile().getParentFile().getParentFile();
+        FilePath ancestorFilePath = new FilePath(ancestorFolder);
+        Multimap<String,String> result = ancestorFilePath.act(new FilesFinder(Sets.newHashSet("./../analysis/util/ActionBinding.cs")));
+        assertTrue(result.get("./../analysis/util/ActionBinding.cs").size() == 1);
+        assertTrue(Lists.newArrayList(result.get("./../analysis/util/ActionBinding.cs")).get(0).endsWith("hudson/plugins/analysis/util/"+resourceFile));
+    }
+
+    @Test
+    public void findFileByVeryVeryPartialPathTest() throws URISyntaxException, IOException, InterruptedException {
+        final String resourceFile = "ActionBinding.cs";
+        URL resource = FilesFinder.class.getResource(resourceFile);
+        File file = new File(resource.toURI());
+        File ancestorFolder = file.getParentFile().getParentFile().getParentFile().getParentFile();
+        FilePath ancestorFilePath = new FilePath(ancestorFolder);
+        Multimap<String,String> result = ancestorFilePath.act(new FilesFinder(Sets.newHashSet("something/./../analysis/util/ActionBinding.cs")));
+        assertTrue(result.get("something/./../analysis/util/ActionBinding.cs").size() == 1);
+        assertTrue(Lists.newArrayList(result.get("something/./../analysis/util/ActionBinding.cs")).get(0).endsWith("hudson/plugins/analysis/util/"+resourceFile));
+    }
+
 }
