@@ -60,7 +60,7 @@ public class FilesFinder implements FilePath.FileCallable<Multimap<String, Strin
         this.walk(file);
 
         for (String fileToFind : Sets.difference(filesToFind.keySet(), results.keySet())) {
-            results.put(fileToFind, null);
+            results.put(fileToFind, "NOT FOUND - " + fileToFind);
         }
 
         return results;

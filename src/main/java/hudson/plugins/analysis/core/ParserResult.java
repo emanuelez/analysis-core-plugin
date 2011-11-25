@@ -14,9 +14,7 @@ import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
-import com.google.common.base.Function;
-import com.google.common.base.Predicate;
-import com.google.common.base.Splitter;
+import com.google.common.base.*;
 import com.google.common.collect.*;
 import hudson.plugins.analysis.util.FilesFinder;
 import org.apache.commons.io.FilenameUtils;
@@ -56,9 +54,6 @@ public class ParserResult implements Serializable {
     private final Set<String> modules = new HashSet<String>();
     /** The workspace. */
     private final Workspace workspace;
-    /** A mapping of relative file names to absolute file names. */
-    @SuppressWarnings("Se")
-    private final Multimap<String, String> fileNameCache = HashMultimap.create();
     /** The log messages. @since 1.20 **/
     private String logMessage;
     /** Total number of modules. @since 1.31 **/
@@ -206,17 +201,16 @@ public class ParserResult implements Serializable {
         Iterable<String> fileNames = Iterables.transform(relativeAnnotations, new Function<FileAnnotation, String>() {
             public String apply(@Nullable FileAnnotation annotation) {
                 if (annotation == null) return null;
-                
-                return Iterables.getLast(Splitter.on(SLASH).trimResults().split(annotation.getFileName()));
+                return annotation.getFileName();
             }
         });
+        
 
         // Find the absolute paths associated to the files and update the annotations
         try {
             Multimap<String, String> files = workspace.findRelativeFiles(Sets.newHashSet(fileNames));
-            System.out.println(files);
             for (FileAnnotation annotation : relativeAnnotations) {
-                annotation.setFileName(Lists.newArrayList(files.get(annotation.getFileName())).get(0));
+                annotation.setFileName(files.get(annotation.getFileName()).iterator().next());
             }
         } catch (IOException e) {
             // ignore
