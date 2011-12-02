@@ -1,17 +1,15 @@
 package hudson.plugins.analysis.core;
 
-import static org.mockito.Matchers.*;
-import static org.mockito.Mockito.*;
-
-import java.io.IOException;
-
-import com.google.common.collect.HashMultimap;
 import com.google.common.collect.Sets;
-import org.junit.Test;
-
 import hudson.plugins.analysis.core.ParserResult.Workspace;
 import hudson.plugins.analysis.util.model.FileAnnotation;
 import hudson.plugins.analysis.util.model.Priority;
+import org.junit.Test;
+
+import java.io.IOException;
+
+import static org.mockito.Matchers.anyString;
+import static org.mockito.Mockito.*;
 
 /**
  * Tests the class {@link ParserResult}.
@@ -119,9 +117,6 @@ public class ParserResultTest {
         when(workspace.child(anyString())).thenReturn(workspace);
         when(workspace.getPath()).thenReturn(WORKSPACE_ROOT);
         when(workspace.findFiles(anyString())).thenReturn(workspaceFiles);
-        HashMultimap<String, String> multimap = HashMultimap.create();
-        multimap.put("file.txt", WORKSPACE_ROOT + "/" + workspaceFiles[0]);
-        when(workspace.findRelativeFiles(anySetOf(String.class))).thenReturn(multimap);
         return workspace;
     }
 }

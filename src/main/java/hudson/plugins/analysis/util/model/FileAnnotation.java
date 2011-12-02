@@ -1,8 +1,8 @@
 package hudson.plugins.analysis.util.model;
 
-import java.util.Collection;
-
 import hudson.model.AbstractBuild;
+
+import java.util.Collection;
 
 /**
  * Annotates a collection of line ranges in a file. An annotation consists of a
@@ -184,4 +184,11 @@ public interface FileAnnotation extends Comparable<FileAnnotation> {
      * @param contextHashCode the value to set
      */
     void setContextHashCode(long contextHashCode);
+
+    /** Returns whether the associated path is absolute
+     *
+     * @return <code>true</code> if the associated path is absolute
+     *         <code>false</code> otherwise
+     */
+    boolean isPathAbsolute();
 }

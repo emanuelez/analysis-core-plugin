@@ -1,34 +1,18 @@
 package hudson.plugins.analysis.core;
 
-import java.io.IOException;
-import java.io.Serializable;
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
-import java.util.logging.Level;
-import java.util.logging.Logger;
-
-import com.google.common.base.*;
 import com.google.common.collect.*;
-import hudson.plugins.analysis.util.FilesFinder;
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang.StringUtils;
-
 import edu.umd.cs.findbugs.annotations.SuppressWarnings;
 import hudson.FilePath;
-
 import hudson.plugins.analysis.Messages;
+import hudson.plugins.analysis.util.AbsolutifyAnnotations;
 import hudson.plugins.analysis.util.FileFinder;
 import hudson.plugins.analysis.util.model.FileAnnotation;
 import hudson.plugins.analysis.util.model.Priority;
+import org.apache.commons.lang.StringUtils;
 
-import javax.annotation.Nullable;
+import java.io.IOException;
+import java.io.Serializable;
+import java.util.*;
 
 /**
  * Stores the collection of parsed annotations and associated error messages.
@@ -38,20 +22,19 @@ import javax.annotation.Nullable;
  */
 public class ParserResult implements Serializable {
     private static final long serialVersionUID = -8414545334379193330L;
-    private static final String SLASH = "/";
 
     /** The parsed annotations. */
     @SuppressWarnings("Se")
-    private final Set<FileAnnotation> annotations = new HashSet<FileAnnotation>();
+    private final Set<FileAnnotation> annotations = Sets.newHashSet();
     /** The collection of error messages. */
     @SuppressWarnings("Se")
-    private final List<String> errorMessages = new ArrayList<String>();
+    private final List<String> errorMessages = Lists.newArrayList();
     /** Number of annotations by priority. */
     @SuppressWarnings("Se")
-    private final Map<Priority, Integer> annotationCountByPriority = new HashMap<Priority, Integer>();
+    private final Map<Priority, Integer> annotationCountByPriority = Maps.newHashMap();
     /** The set of modules. */
     @SuppressWarnings("Se")
-    private final Set<String> modules = new HashSet<String>();
+    private final Set<String> modules = Sets.newHashSet();
     /** The workspace. */
     private final Workspace workspace;
     /** The log messages. @since 1.20 **/
@@ -65,13 +48,11 @@ public class ParserResult implements Serializable {
     interface Workspace extends Serializable {
         Workspace child(String fileName);
 
-        boolean exists() throws InterruptedException, IOException;
-
         String getPath();
 
         String[] findFiles(String pattern) throws IOException, InterruptedException;
         
-        Multimap<String, String> findRelativeFiles(Set<String> filesToFind) throws IOException, InterruptedException;
+        Iterable<? extends FileAnnotation> absolutifyAnnotations(Iterable<? extends FileAnnotation> annotations) throws IOException, InterruptedException;
     }
 
     /**
@@ -131,49 +112,12 @@ public class ParserResult implements Serializable {
     }
 
     /**
-     * Finds a file with relative filename and replaces the name with the absolute path.
-     *
-     * @param annotation the annotation
-     */
-    // TODO: this method is quite dumb: when used on a slave then for each file a remote call is initiated
-    private void expandRelativePaths(final FileAnnotation annotation) {
-        try {
-            if (hasRelativeFileName(annotation)) {
-                Workspace remoteFile = workspace.child(annotation.getFileName());
-                if (remoteFile.exists()) {
-                    annotation.setFileName(remoteFile.getPath());
-                }
-            }
-        }
-        catch (IOException exception) {
-            // ignore
-        }
-        catch (InterruptedException exception) {
-            // ignore
-        }
-    }
-
-    /**
-     * Returns whether the annotation references a relative filename.
-     *
-     * @param annotation
-     *            the annotation
-     * @return <code>true</code> if the filename is relative
-     */
-    private boolean hasRelativeFileName(final FileAnnotation annotation) {
-        String fileName = annotation.getFileName();
-        return !fileName.startsWith(SLASH) && !fileName.contains(":");
-    }
-
-    /**
      * Adds the specified annotation to this container.
      *
      * @param annotation the annotation to add
      */
     public final void addAnnotation(final FileAnnotation annotation) {
         if (!annotations.contains(annotation)) {
-            expandRelativePaths(annotation);
-
             annotations.add(annotation);
             Integer count = annotationCountByPriority.get(annotation.getPriority());
             annotationCountByPriority.put(annotation.getPriority(), count + 1);
@@ -186,31 +130,12 @@ public class ParserResult implements Serializable {
      * @param newAnnotations the annotations to add
      */
     public final void addAnnotations(final Collection<? extends FileAnnotation> newAnnotations) {
-        for (FileAnnotation annotation : newAnnotations) {
-            addAnnotation(annotation);
-        }
 
-        // Find the annotations that still have relative Paths
-        Iterable<? extends FileAnnotation> relativeAnnotations = Iterables.filter(newAnnotations, new Predicate<FileAnnotation>() {
-            public boolean apply(@Nullable FileAnnotation annotation) {
-                return annotation != null && hasRelativeFileName(annotation);
-            }
-        });
-        
-        // Get the file names out of the obtained annotations
-        Iterable<String> fileNames = Iterables.transform(relativeAnnotations, new Function<FileAnnotation, String>() {
-            public String apply(@Nullable FileAnnotation annotation) {
-                if (annotation == null) return null;
-                return annotation.getFileName();
-            }
-        });
-        
-
-        // Find the absolute paths associated to the files and update the annotations
         try {
-            Multimap<String, String> files = workspace.findRelativeFiles(Sets.newHashSet(fileNames));
-            for (FileAnnotation annotation : relativeAnnotations) {
-                annotation.setFileName(files.get(annotation.getFileName()).iterator().next());
+            Iterable<? extends FileAnnotation> absoluteAnnotations = workspace.absolutifyAnnotations(newAnnotations);
+
+            for (FileAnnotation absoluteAnnotation : absoluteAnnotations) {
+                addAnnotation(absoluteAnnotation);
             }
         } catch (IOException e) {
             // ignore
@@ -444,8 +369,8 @@ public class ParserResult implements Serializable {
             return wrapped.act(new FileFinder(pattern));
         }
 
-        public Multimap<String, String> findRelativeFiles(final Set<String> filesToFind) throws IOException, InterruptedException {
-            return wrapped.act(new FilesFinder(filesToFind));
+        public Iterable<? extends FileAnnotation> absolutifyAnnotations(Iterable<? extends FileAnnotation> annotations) throws IOException, InterruptedException {
+            return wrapped.act(new AbsolutifyAnnotations(annotations));
         }
     }
 
@@ -476,11 +401,10 @@ public class ParserResult implements Serializable {
         }
 
         /** {@inheritDoc} */
-        public Multimap<String, String> findRelativeFiles(Set<String> String) throws IOException, InterruptedException {
-            return HashMultimap.create();
+        public Iterable<? extends FileAnnotation> absolutifyAnnotations(Iterable<? extends FileAnnotation> annotations) throws IOException, InterruptedException {
+            return Sets.newHashSet();
         }
     }
 
-    private static final Logger LOGGER = Logger.getLogger(ParserResult.class.getName());
 }
 

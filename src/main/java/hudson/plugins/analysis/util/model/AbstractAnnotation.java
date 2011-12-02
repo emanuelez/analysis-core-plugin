@@ -1,19 +1,19 @@
 package hudson.plugins.analysis.util.model;
 
+import hudson.model.AbstractBuild;
+import hudson.model.Item;
+import hudson.plugins.analysis.util.PathStringCleaner;
+import org.apache.commons.io.FilenameUtils;
+import org.apache.commons.lang.StringUtils;
+import org.kohsuke.stapler.export.Exported;
+import org.kohsuke.stapler.export.ExportedBean;
+
 import java.io.File;
 import java.io.Serializable;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-
-import org.apache.commons.io.FilenameUtils;
-import org.apache.commons.lang.StringUtils;
-import org.kohsuke.stapler.export.Exported;
-import org.kohsuke.stapler.export.ExportedBean;
-
-import hudson.model.Item;
-import hudson.model.AbstractBuild;
 
 /**
  *  A base class for annotations.
@@ -251,7 +251,8 @@ public abstract class AbstractAnnotation implements FileAnnotation, Serializable
      * @param fileName the value to set
      */
     public final void setFileName(final String fileName) {
-        this.fileName = StringUtils.strip(fileName).replace('\\', '/');
+        String trimmed = fileName.trim().replace("\\", "/");
+        this.fileName = PathStringCleaner.clean(trimmed);
     }
 
     /** {@inheritDoc} */
@@ -432,10 +433,7 @@ public abstract class AbstractAnnotation implements FileAnnotation, Serializable
      * @return <code>true</code>, if successful
      */
     public final boolean canDisplayFile(final AbstractBuild<?, ?> owner) {
-        if (owner.hasPermission(Item.WORKSPACE)) {
-            return new File(getFileName()).exists() || new File(getTempName(owner)).exists();
-        }
-        return false;
+        return owner.hasPermission(Item.WORKSPACE) && (new File(getFileName()).exists() || new File(getTempName(owner)).exists());
     }
 
     /** {@inheritDoc} */
@@ -458,5 +456,10 @@ public abstract class AbstractAnnotation implements FileAnnotation, Serializable
     @Override
     public String toString() {
         return String.format("%s(%s):%s,%s,%s:%s", getFileName(), primaryLineNumber, priority, getCategory(), getType(), getMessage());
+    }
+
+    /** {@inheritDoc} */
+    public boolean isPathAbsolute() {
+        return fileName != null && (fileName.startsWith("/") || fileName.matches("^[a-zA-Z]:/.*"));
     }
 }
