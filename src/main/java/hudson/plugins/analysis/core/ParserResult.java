@@ -1,5 +1,7 @@
 package hudson.plugins.analysis.core;
 
+import com.google.common.base.Function;
+import com.google.common.base.Predicate;
 import com.google.common.collect.*;
 import edu.umd.cs.findbugs.annotations.SuppressWarnings;
 import hudson.FilePath;
@@ -10,6 +12,7 @@ import hudson.plugins.analysis.util.model.FileAnnotation;
 import hudson.plugins.analysis.util.model.Priority;
 import org.apache.commons.lang.StringUtils;
 
+import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.*;
@@ -52,7 +55,7 @@ public class ParserResult implements Serializable {
 
         String[] findFiles(String pattern) throws IOException, InterruptedException;
         
-        Iterable<? extends FileAnnotation> absolutifyAnnotations(Iterable<? extends FileAnnotation> annotations) throws IOException, InterruptedException;
+        BiMap<String, String> absolutifyAnnotations(Iterable<String> annotations) throws IOException, InterruptedException;
     }
 
     /**
@@ -130,12 +133,33 @@ public class ParserResult implements Serializable {
      * @param newAnnotations the annotations to add
      */
     public final void addAnnotations(final Collection<? extends FileAnnotation> newAnnotations) {
+        
+        // Find the annotations with relative paths
+        Iterable<? extends FileAnnotation> relativeAnnotations = Iterables.filter(newAnnotations, new Predicate<FileAnnotation>() {
+            public boolean apply(@Nullable FileAnnotation annotation) {
+                return annotation != null && !annotation.isPathAbsolute();
+            }
+        });
+
+        // Get the relative paths
+        Iterable<String> relativePaths = Iterables.transform(relativeAnnotations, new Function<FileAnnotation, String>() {
+            public String apply(@Nullable FileAnnotation fileAnnotation) {
+                if (fileAnnotation != null) {
+                    return fileAnnotation.getFileName();
+                } else {
+                    return null;
+                }
+            }
+        });
 
         try {
-            Iterable<? extends FileAnnotation> absoluteAnnotations = workspace.absolutifyAnnotations(newAnnotations);
+            BiMap<String, String> relativeToAbsolute = workspace.absolutifyAnnotations(relativePaths);
 
-            for (FileAnnotation absoluteAnnotation : absoluteAnnotations) {
-                addAnnotation(absoluteAnnotation);
+            for (FileAnnotation annotation : newAnnotations) {
+                if (Iterables.contains(relativeAnnotations, annotation)) {
+                    annotation.setFileName(relativeToAbsolute.get(annotation.getFileName()));
+                }
+                addAnnotation(annotation);
             }
         } catch (IOException e) {
             // ignore
@@ -369,7 +393,7 @@ public class ParserResult implements Serializable {
             return wrapped.act(new FileFinder(pattern));
         }
 
-        public Iterable<? extends FileAnnotation> absolutifyAnnotations(Iterable<? extends FileAnnotation> annotations) throws IOException, InterruptedException {
+        public BiMap<String, String> absolutifyAnnotations(Iterable<String> annotations) throws IOException, InterruptedException {
             return wrapped.act(new AbsolutifyAnnotations(annotations));
         }
     }
@@ -401,8 +425,8 @@ public class ParserResult implements Serializable {
         }
 
         /** {@inheritDoc} */
-        public Iterable<? extends FileAnnotation> absolutifyAnnotations(Iterable<? extends FileAnnotation> annotations) throws IOException, InterruptedException {
-            return Sets.newHashSet();
+        public BiMap<String, String> absolutifyAnnotations(Iterable<String> annotations) throws IOException, InterruptedException {
+            return HashBiMap.create();
         }
     }
 

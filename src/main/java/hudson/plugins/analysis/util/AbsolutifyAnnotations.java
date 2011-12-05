@@ -1,76 +1,78 @@
 package hudson.plugins.analysis.util;
 
 import com.google.common.base.Predicate;
-import com.google.common.collect.*;
+import com.google.common.collect.BiMap;
+import com.google.common.collect.HashBiMap;
+import com.google.common.collect.Iterables;
+import com.google.common.collect.Lists;
 import hudson.FilePath;
-import hudson.plugins.analysis.util.model.FileAnnotation;
 import hudson.remoting.VirtualChannel;
 
 import javax.annotation.Nullable;
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 
-public class AbsolutifyAnnotations implements FilePath.FileCallable<Iterable<? extends FileAnnotation>> {
+public class AbsolutifyAnnotations implements FilePath.FileCallable<BiMap<String, String>> {
 
-    private Iterable<? extends FileAnnotation> annotations;
-
-    private Multimap<String, FileAnnotation> relative = HashMultimap.create();
+    private List<String> relativePathsLeft;
 
     private BiMap<String, String> relativeToAbsolute = HashBiMap.create();
+    
+    private final int maxDepth;
 
-    public AbsolutifyAnnotations(Iterable<? extends FileAnnotation> annotations) {
-        this.annotations = annotations;
+    public AbsolutifyAnnotations(Iterable<String> relativePaths) {
+        this.relativePathsLeft = Lists.newArrayList(relativePaths);
+        this.maxDepth = 20;
     }
 
-    public Iterable<? extends FileAnnotation> invoke(File file, VirtualChannel virtualChannel) throws IOException, InterruptedException {
+    public AbsolutifyAnnotations(Iterable<String> relativePaths, int maxDepth) {
+        this.relativePathsLeft = Lists.newArrayList(relativePaths);
+        this.maxDepth = maxDepth;
+    }
 
-        Iterable<? extends FileAnnotation> relativeAnnotations = Iterables.filter(
-                annotations,
-                new Predicate<FileAnnotation>() {
-                    public boolean apply(@Nullable FileAnnotation fileAnnotation) {
-                        return fileAnnotation != null && !fileAnnotation.isPathAbsolute();
-                    }
-                });
+    public BiMap<String, String> invoke(File file, VirtualChannel virtualChannel) throws IOException, InterruptedException {
 
+        walk(file, 0);
 
-        for (FileAnnotation relativeAnnotation : relativeAnnotations) {
-            relative.put(relativeAnnotation.getPathName(), relativeAnnotation);
-        }
-
-        walk(file);
-
-        for (FileAnnotation annotation : annotations) {
-            if (!annotation.isPathAbsolute()) {
-                annotation.setFileName(relativeToAbsolute.get(annotation.getPathName()));
+        if (!relativePathsLeft.isEmpty()) {
+            for (String relativePath : relativePathsLeft) {
+                relativeToAbsolute.put(relativePath, "NOT FOUND - " + relativePath);
             }
         }
 
-        return annotations;
+        return relativeToAbsolute;
+    }
+    
+    private String removeInitialDoubleDots(String relativePath) {
+        String cleanRelativePath = relativePath;
+        while (cleanRelativePath.startsWith("../")) {
+            cleanRelativePath = cleanRelativePath.substring(3);
+        }
+        return cleanRelativePath;
     }
 
-    private void walk(File dir) {
+    private void walk(File dir, int depth) {
         File[] listFile = dir.listFiles();
         if (listFile != null) {
             for (final File aListFile : listFile) {
                 if (aListFile.isDirectory()) {
-                    walk(aListFile);
+                    if (depth < maxDepth) {
+                        walk(aListFile, depth + 1);
+                    }
                 } else {
-                    boolean isInteresting = Iterables.any(
-                            relative.keys(),
+                    int index = Iterables.indexOf(
+                            relativePathsLeft,
                             new Predicate<String>() {
                                 public boolean apply(@Nullable String s) {
-                                    return aListFile.getPath().endsWith(s);
+                                    return aListFile.getPath().endsWith(removeInitialDoubleDots(s));
                                 }
-                            });
-                    if (isInteresting) {
-                        String cleanPath = Iterables.find(
-                                relative.keys(),
-                                new Predicate<String>() {
-                                    public boolean apply(@Nullable String s) {
-                                        return aListFile.getPath().endsWith(s);
-                                    }
-                                });
-                        relativeToAbsolute.put(cleanPath, aListFile.getPath());
+                            }
+                    );
+
+                    if (index >= 0) {
+                        relativeToAbsolute.put(relativePathsLeft.get(index), aListFile.getPath());
+                        relativePathsLeft.remove(index);
                     }
                 }
             }
