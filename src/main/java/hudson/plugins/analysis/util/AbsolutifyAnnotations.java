@@ -35,47 +35,53 @@ public class AbsolutifyAnnotations implements FilePath.FileCallable<BiMap<String
 
         walk(file, 0);
 
-        if (!relativePathsLeft.isEmpty()) {
-            for (String relativePath : relativePathsLeft) {
-                relativeToAbsolute.put(relativePath, "NOT FOUND - " + relativePath);
-            }
+        for (String relativePath : relativePathsLeft) {
+            relativeToAbsolute.put(relativePath, "NOT FOUND - " + relativePath);
         }
 
         return relativeToAbsolute;
     }
     
-    private String removeInitialDoubleDots(String relativePath) {
-        String cleanRelativePath = relativePath;
-        while (cleanRelativePath.startsWith("../")) {
-            cleanRelativePath = cleanRelativePath.substring(3);
-        }
-        return cleanRelativePath;
-    }
+
 
     private void walk(File dir, int depth) {
         File[] listFile = dir.listFiles();
         if (listFile != null) {
-            for (final File aListFile : listFile) {
+            for (File aListFile : listFile) {
                 if (aListFile.isDirectory()) {
                     if (depth < maxDepth) {
                         walk(aListFile, depth + 1);
                     }
                 } else {
-                    int index = Iterables.indexOf(
-                            relativePathsLeft,
-                            new Predicate<String>() {
-                                public boolean apply(@Nullable String s) {
-                                    return aListFile.getPath().endsWith(removeInitialDoubleDots(s));
-                                }
-                            }
-                    );
+                    int index = Iterables.indexOf(relativePathsLeft, new FindFilePredicate(aListFile));
 
                     if (index >= 0) {
-                        relativeToAbsolute.put(relativePathsLeft.get(index), aListFile.getPath());
+                        relativeToAbsolute.put(relativePathsLeft.get(index), aListFile.getAbsolutePath());
                         relativePathsLeft.remove(index);
                     }
                 }
             }
+        }
+    }
+
+    private class FindFilePredicate implements Predicate<String> {
+        
+        private File currentFile;
+
+        private FindFilePredicate(File currentFile) {
+            this.currentFile = currentFile;
+        }
+
+        private String removeInitialDoubleDots(String relativePath) {
+            String cleanRelativePath = relativePath;
+            while (cleanRelativePath.startsWith("../")) {
+                cleanRelativePath = cleanRelativePath.substring(3);
+            }
+            return cleanRelativePath;
+        }
+
+        public boolean apply(@Nullable String relativePath) {
+            return relativePath != null && currentFile.getAbsolutePath().endsWith(this.removeInitialDoubleDots(relativePath));
         }
     }
 

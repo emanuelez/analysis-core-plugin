@@ -16,6 +16,7 @@ import javax.annotation.Nullable;
 import java.io.IOException;
 import java.io.Serializable;
 import java.util.*;
+import java.util.logging.Logger;
 
 /**
  * Stores the collection of parsed annotations and associated error messages.
@@ -44,6 +45,8 @@ public class ParserResult implements Serializable {
     private String logMessage;
     /** Total number of modules. @since 1.31 **/
     private int numberOfModules;
+    
+    private static final Logger LOGGER = Logger.getLogger(ParserResult.class.getName());
 
     /**
      * Facade for the remote workspace.
@@ -152,8 +155,18 @@ public class ParserResult implements Serializable {
             }
         });
 
+        int relativePathsCount = Iterables.size(relativePaths);
+        if (relativePathsCount > 0) {
+            LOGGER.info(relativePathsCount + " annotation(s) with relative paths were found. Will have to traverse the workspace.");
+            LOGGER.info("The workspace path is: " +  workspace.getPath());
+        }
+
         try {
             BiMap<String, String> relativeToAbsolute = workspace.absolutifyAnnotations(relativePaths);
+
+            if (relativePathsCount - relativeToAbsolute.size() > 0) {
+                LOGGER.warning("Could not find the absolute path of " + (relativePathsCount - relativeToAbsolute.size()) + " annotation(s).");
+            }
 
             for (FileAnnotation annotation : newAnnotations) {
                 if (Iterables.contains(relativeAnnotations, annotation)) {
@@ -429,6 +442,8 @@ public class ParserResult implements Serializable {
             return HashBiMap.create();
         }
     }
+
+
 
 }
 

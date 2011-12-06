@@ -59,4 +59,5 @@ public class AbsolutifyAnnotationsTest {
         assertTrue(result.get("../ActionBinding.cs").startsWith("NOT FOUND"));
         assertTrue(result.get("util/ActionBinding-Original-Formatting.cs").startsWith("NOT FOUND"));
     }
+
 }
